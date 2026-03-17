@@ -3,9 +3,10 @@ liquidity-storage.json
 liquidity-monitor.json
 liquidity-history-cache.json
 
-# Charts
+# Charts (except example)
 charts/
 *.png
+!example-chart.png
 
 # Logs
 *.log
