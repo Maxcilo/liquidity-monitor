@@ -182,7 +182,7 @@ liquidity-monitor/
 
 ## 作者
 
-[@GO8888i](https://x.com/GO8888i) | 大富小姐姐 🎀
+[@Go8888I](https://x.com/Go8888I) | 大富小姐姐 🎀
 
 ## 许可证
 
