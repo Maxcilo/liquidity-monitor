@@ -154,7 +154,14 @@ function loadHistory() {
 
 function saveHistory(data) {
   const history = loadHistory();
-  history.history.push(data);
+  // 避免重复添加同一天的数据
+  const lastEntry = history.history[history.history.length - 1];
+  if (lastEntry && lastEntry.date === data.date) {
+    // 同一天已存在，跳过或更新
+    history.history[history.history.length - 1] = data;
+  } else {
+    history.history.push(data);
+  }
   if (history.history.length > 90) {
     history.history = history.history.slice(-90);
   }
@@ -264,7 +271,8 @@ async function getHistoryFRED(seriesId, days = 30) {
 }
 
 async function main() {
-  console.log('💧 流动性监控 v2.1\n');
+  // 先获取日期
+  const currentDate = new Date().toISOString().slice(0, 10);
   
   const results = await Promise.allSettled([
     getLatestFRED('RRPONTSYD'),
@@ -355,9 +363,7 @@ async function main() {
   saveHistory(current);
   const risk = assessLiquidityRisk(current, history);
   
-  console.log('📅 ' + current.date + '\n');
-  
-  console.log('💧 流动性监控\n');
+  console.log('\n💧 美国流动性监控报告（' + currentDate + '）\n');
   
   // 核心指标
   const rrpVal = parseFloat(current.rrp);
@@ -372,10 +378,44 @@ async function main() {
   else if (reservesVal < CONFIG.thresholds.reserves.critical) reservesStatus = '🔴';
   else if (reservesVal < CONFIG.thresholds.reserves.warning) reservesStatus = '⚠️';
   
+  // 计算周期变化 - 使用上一个交易日的数据
+  let rrpChange = '';
+  let reservesChange = '';
+  let sofrChange = '';
+  
+  // 获取上一个交易日的数据 - 从 dateMap 获取
+  const dates = Object.keys(dateMap).sort();
+  
+  if (dates.length > 1) {
+    const lastDate = dates[dates.length - 2];  // 倒数第二个日期
+    const lastEntry = dateMap[lastDate];
+    
+    if (lastEntry && lastEntry.rrp) {
+      const lastRrp = parseFloat(lastEntry.rrp) * 10;
+      const rrpDiff = (rrpVal * 10) - lastRrp;
+      if (rrpDiff > 0) rrpChange = ' ↑' + rrpDiff.toFixed(2) + '亿';
+      else if (rrpDiff < 0) rrpChange = ' ↓' + Math.abs(rrpDiff).toFixed(2) + '亿';
+    }
+    
+    if (lastEntry && lastEntry.reserves) {
+      const lastReserves = parseFloat(lastEntry.reserves) / 1000000;
+      const reservesDiff = reservesVal - lastReserves;
+      if (reservesDiff > 0) reservesChange = ' ↑' + reservesDiff.toFixed(2) + '万亿';
+      else if (reservesDiff < 0) reservesChange = ' ↓' + Math.abs(reservesDiff).toFixed(2) + '万亿';
+    }
+    
+    if (lastEntry && lastEntry.sofr) {
+      const lastSofr = parseFloat(lastEntry.sofr);
+      const sofrDiff = sofrVal - lastSofr;
+      if (sofrDiff > 0) sofrChange = ' ↑' + sofrDiff.toFixed(2) + '%';
+      else if (sofrDiff < 0) sofrChange = ' ↓' + Math.abs(sofrDiff).toFixed(2) + '%';
+    }
+  }
+  
   console.log('核心指标：\n');
-  console.log('• 💵 RRP（逆回购）：' + (rrpVal * 10).toFixed(2) + ' 亿 ' + rrpStatus);
-  console.log('• 🏦 Bank Reserves（银行准备金）：' + reservesVal.toFixed(2) + ' 万亿 ' + reservesStatus);
-  console.log('• 📈 SOFR（担保隔夜融资利率）：' + sofrVal.toFixed(2) + '% ✅');
+  console.log('• 💵 RRP（逆回购）：' + (rrpVal * 10).toFixed(2) + ' 亿' + rrpChange + ' ' + rrpStatus);
+  console.log('• 🏦 Bank Reserves（银行准备金）：' + reservesVal.toFixed(2) + ' 万亿' + reservesChange + ' ' + reservesStatus);
+  console.log('• 📈 SOFR（担保隔夜融资利率）：' + sofrVal.toFixed(2) + '%' + sofrChange + ' ✅');
   
   console.log('\n风险评估：\n');
   console.log('• ' + risk.level);
@@ -478,10 +518,7 @@ async function main() {
     console.log('市场流动性正常，各项指标健康，流动性环境良好。');
   }
   
-  console.log('\n💡 配置文件: ' + CONFIG_FILE);
-  
-  // 生成图表
-  console.log('\n📊 生成图表...');
+  console.log('\n\n───\n图表已发送！');
   try {
     execSync('node ' + path.join(__dirname, 'liquidity-chart.js'), { 
       stdio: 'pipe',
